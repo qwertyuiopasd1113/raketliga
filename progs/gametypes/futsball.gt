@@ -12,7 +12,7 @@ generic/awards.as;
 futsball.as;
 futsball_round.as;
 futsball_entities.as;
-futsball_ball2.as;
+futsball_ball.as;
 futsball_jetpack.as;
 futsball_chasecam.as;
 
