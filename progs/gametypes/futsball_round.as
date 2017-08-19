@@ -155,12 +155,7 @@ class Futsball
     {
         for ( int i = 0; i < maxClients; i++ )
         {
-            if ( !G_GetClient(i).getEnt().isGhosting() )
-            {
-                jetpacks[i].Update();
-            } else {
-                chaseCams[i].Update();
-            }
+            Players[i].Update();
         }
 
         FB_Ball.Update();

@@ -17,10 +17,10 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
-//Cvar g_fb_inventory( "g_fb_inventory", "gb mg rg gl rl pg lg eb ig cells shells grens rockets plasma lasers bullets instas", 0 );
-//Cvar g_fb_ammo( "g_fb_ammo", "0 75 20 20 40 125 180 15 10", 0 ); // GB MG RG GL RL PG LG EB
-Cvar g_fb_inventory( "g_fb_inventory", "", 0 );
-Cvar g_fb_ammo( "g_fb_ammo", "0 0 0 0 0 0 0 0 0", 0 ); // GB MG RG GL RL PG LG EB IB
+//Cvar fb_inventory( "fb_inventory", "gb mg rg gl rl pg lg eb ig cells shells grens rockets plasma lasers bullets instas", 0 );
+//Cvar fb_ammo( "fb_ammo", "0 75 20 20 40 125 180 15 10", 0 ); // GB MG RG GL RL PG LG EB
+Cvar fb_inventory( "fb_inventory", "", 0 );
+Cvar fb_ammo( "fb_ammo", "0 0 0 0 0 0 0 0 0", 0 ); // GB MG RG GL RL PG LG EB IB
 
 int prcYesIcon;
 
@@ -223,8 +223,8 @@ void GT_PlayerRespawn( Entity @ent, int old_team, int new_team )
     {
         // give the weapons and ammo as defined in cvars
         String token, weakammotoken, ammotoken;
-        String itemList = g_fb_inventory.string;
-        String ammoCounts = g_fb_ammo.string;
+        String itemList = fb_inventory.string;
+        String ammoCounts = fb_ammo.string;
 
         ent.client.inventoryClear();
 
@@ -463,10 +463,8 @@ void GT_InitGametype()
     owngoals.resize(maxClients);
     for ( int i = 0; i < maxClients; i++ )
     {
-        @jetpacks[i].client = @G_GetClient(i);
-        @jetpacks[i].player = @G_GetClient(i).getEnt();
-        @chaseCams[i].client = @G_GetClient(i);
-        @chaseCams[i].player = @G_GetClient(i).getEnt();
+        @Players[i].client = @G_GetClient(i);
+        @Players[i].player = @G_GetClient(i).getEnt();
     }
 
     G_Print( "Gametype '" + gametype.title + "' initialized\n" );

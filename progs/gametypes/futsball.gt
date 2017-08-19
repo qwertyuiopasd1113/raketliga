@@ -13,8 +13,7 @@ futsball.as;
 futsball_round.as;
 futsball_entities.as;
 futsball_ball.as;
-futsball_jetpack.as;
-futsball_chasecam.as;
+futsball_player.as;
 
 legacy/quake1.as;
 

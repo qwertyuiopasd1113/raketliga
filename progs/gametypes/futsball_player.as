@@ -1,33 +1,51 @@
+Player[] Players( maxClients );
+
+const int CHASE_NONE = 0;
+const int CHASE_FREE = 1;
+const int CHASE_FIXED = 2;
+const int CHASE_FOLLOW = 3;
+const int CHASE_RESET = 4;
+
 Cvar fb_airdash("fb_airdash", "0", 0);
 Cvar fb_jetpack("fb_jetpack", "1", 0);
 
-Jetpack[] jetpacks(maxClients);
-
-class Jetpack
+class Player
 {
 	Client@ client;
 	Entity@ player;
 	Entity@ jetpack;
 	bool jetpackActive = false;
+
 	uint dashTimestamp;
 	bool canDash = false;
 	bool hasDashed = false;
 	bool dashPressed = false;
 	bool isOnGround = true;
 
-	uint gbTimeStamp;
-	float gbCharge;
-	bool gbPressed = false;
-	bool inrange = false;
-	uint rangesoundloop;
+	uint kickTimestamp;
+	float kickCharge;
 
-	Jetpack()
+	uint chase_timestamp = 0;
+	bool chase_pressed = false;
+	int chase_state;
+
+	Player()
 	{
+		this.chase_state = CHASE_NONE;
 	}
-
-	~Jetpack(){}
+	~Player(){}
 
 	void Update()
+	{
+        if ( player.isGhosting() )
+        {
+        	this.Ghosting();
+        } else {
+            this.notGhosting();
+        }
+	}
+
+	void notGhosting()
 	{
 		if ( @this.jetpack == null )
 		{
@@ -65,25 +83,6 @@ class Jetpack
 			new_isOnGround = false;
 
 
-		/*if ( !inrange && InRange() )
-		{
-			inrange = true;
-			rangesoundloop = 0;
-		}
-		if ( inrange && !InRange() )
-		{
-			inrange = false;
-			G_LocalSound(client, CHAN_MUZZLEFLASH, G_SoundIndex("sounds/futsball/empty.ogg"));
-		}
-		if ( inrange && rangesoundloop <= levelTime )
-		{
-			G_LocalSound(client, CHAN_MUZZLEFLASH, G_SoundIndex("sounds/futsball/ball_close_0.ogg"));
-
-			rangesoundloop = levelTime + 6000;
-		}*/
-
-
-
 		if ( @player.groundEntity == null )
 		{
 			client.pmoveFeatures = client.pmoveFeatures & ~PMFEAT_CROUCH;
@@ -98,7 +97,7 @@ class Jetpack
 
 
 
-		if ( client.pressedKeys & 16 == 16 && gbTimeStamp <= levelTime && futsball.state != FB_ROUND_PREROUND )
+		if ( client.pressedKeys & 16 == 16 && kickTimestamp <= levelTime && futsball.state != FB_ROUND_PREROUND )
 		{
 			Vec3 origin = player.origin;
 			origin.z += player.viewHeight;
@@ -108,7 +107,7 @@ class Jetpack
 				player.angles.angleVectors(fwd, right, up);
 				fwd.normalize();
 				float kick = fb_maxspeed.value;
-				if ( gbCharge < 100 )
+				if ( kickCharge < 100 )
 					kick *= 1.0;
 				else 
 					kick *= 2.0;
@@ -121,22 +120,22 @@ class Jetpack
 
 				kick *= (0.9+movement_boost/10.0);
 
-				G_CenterPrintMsg(player, "knockback: "+kick);
+				//G_CenterPrintMsg(player, "knockback: "+kick);
 				FB_Ball.Knockback(fwd, kick);
-				gbTimeStamp = levelTime + 1000;
+				kickTimestamp = levelTime + 1000;
 				@FB_Ball.lastHit = @client;
 				G_PositionedSound(FB_Ball.collider.origin, CHAN_FIXED, G_SoundIndex("sounds/futsball/ball_hit_1.ogg"), 0.25);
 
 			}
-			gbCharge = 0;
+			kickCharge = 0;
 		} else {
-			gbCharge += 0.8;
-			if ( gbCharge > 100 )
+			kickCharge += 0.8;
+			if ( kickCharge > 100 )
 			{
-				gbCharge = 100;
+				kickCharge = 100;
 			}
 		}
-		player.health = 0.1+gbCharge;
+		player.health = 0.1+kickCharge;
 
 
 		if ( fb_jetpack.boolean )
@@ -268,5 +267,94 @@ class Jetpack
 		float angle = fwd*direction;
 		//G_CenterPrintMsg(player, ""+angle);
 		return ( angle > 0 && porigin.distance(FB_Ball.collider.origin) < 300 );
+	}
+
+	void Ghosting()
+	{
+		if ( player.team == TEAM_SPECTATOR )
+		{
+			//G_CenterPrintMsg(player, "chase_state: "+chase_state);
+			if ( client.chaseActive && chase_state != CHASE_NONE )
+			{
+				client.chaseActive = false;
+			}
+			if ( !client.chaseActive )
+			{
+				bool new_chase_pressed = ( client.pressedKeys & 16 == 16 );
+				if ( new_chase_pressed && !chase_pressed )
+				{
+					chase_state++;
+				}
+				chase_pressed = new_chase_pressed;
+
+				switch (chase_state)
+				{
+					case CHASE_FREE:
+					{
+						// normal freefly camera, ignore
+					}
+					break;
+					case CHASE_FIXED:
+					{
+						float chase_rate = 0.01;
+						player.origin = player.origin*(1.0-chase_rate) + Vec3(0, 2000, 1200)*chase_rate;
+
+						Vec3 direction = Vec3(FB_Ball.main.origin.x,0,-1000) - player.origin;
+						direction.normalize();
+						Vec3 player_dir, right, up;
+						player.angles.angleVectors(player_dir, right, up);
+						player_dir = player_dir*(1.0-chase_rate) + direction*chase_rate;
+						player.angles = direction.toAngles();
+
+						player.moveType = MOVETYPE_NONE;
+					}
+					break;
+					case CHASE_FOLLOW:
+					{
+						float chase_rate = 0.05;
+						Trace tr;
+						float range = 200;
+
+						Vec3 ball_dir = FB_Ball.main.velocity;
+						ball_dir.z = -0.01;
+						ball_dir.normalize();
+
+						Vec3 b_origin = FB_Ball.main.origin;
+
+						Vec3 chase_dest = Vec3(b_origin);
+						chase_dest -= range * ball_dir;
+						chase_dest.z += 100;
+
+						tr.doTrace(b_origin, Vec3(-4,-4,-4), Vec3(4, 4, 4), chase_dest, player.entNum, MASK_SOLID);
+						if ( tr.fraction != 1.0 )
+						{
+							Vec3 stop = tr.endPos;
+							stop.z += (1.0-tr.fraction) * 32;
+							tr.doTrace(b_origin, Vec3(-4,-4,-4), Vec3(4, 4, 4), stop, player.entNum, MASK_SOLID);
+							chase_dest = tr.endPos;
+						}
+
+						player.origin = player.origin*(1.0-chase_rate) + chase_dest*chase_rate;
+						Vec3 player_dir, right, up;
+						player.angles.angleVectors(player_dir, right, up);
+						player_dir = player_dir*(1.0-chase_rate) + ball_dir*chase_rate;
+						player.angles = player_dir.toAngles();
+
+						player.moveType = MOVETYPE_NONE;
+					}
+					break;
+					case CHASE_RESET:
+					{
+						chase_state = CHASE_NONE;
+						chase_timestamp = levelTime + 500;
+						client.chaseActive = true;
+						//player.moveType = MOVETYPE_NOCLIP;
+					}
+					break;
+					default: break;
+				}
+			}
+
+		}
 	}
 }
