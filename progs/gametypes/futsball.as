@@ -19,8 +19,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 //Cvar g_fb_inventory( "g_fb_inventory", "gb mg rg gl rl pg lg eb ig cells shells grens rockets plasma lasers bullets instas", 0 );
 //Cvar g_fb_ammo( "g_fb_ammo", "0 75 20 20 40 125 180 15 10", 0 ); // GB MG RG GL RL PG LG EB
-Cvar g_fb_inventory( "g_fb_inventory", "rg lg eb ig cells shells lasers instas", 0 );
-Cvar g_fb_ammo( "g_fb_ammo", "0 0 20 0 0 0 180 15 10", 0 ); // GB MG RG GL RL PG LG EB IB
+Cvar g_fb_inventory( "g_fb_inventory", "", 0 );
+Cvar g_fb_ammo( "g_fb_ammo", "0 0 0 0 0 0 0 0 0", 0 ); // GB MG RG GL RL PG LG EB IB
 
 int prcYesIcon;
 
@@ -123,19 +123,10 @@ bool GT_Command( Client @client, const String &cmdString, const String &argsStri
 // select a spawning point for a player
 Entity @GT_SelectSpawnPoint( Entity @self )
 {
-	Entity @spot;
     if ( self.team == TEAM_ALPHA )
-        @spot = @GENERIC_SelectBestRandomSpawnPoint( self, "team_CTF_alphaplayer" );
+        return @FB_SelectBestRandomTeamSpawnPoint( self, TEAM_ALPHA );
     else
-		@spot = @GENERIC_SelectBestRandomSpawnPoint( self, "team_CTF_betaplayer" );
-		
-	if( @spot != null )
-		return @spot;
-
-    if ( self.team == TEAM_ALPHA )
-        return GENERIC_SelectBestRandomSpawnPoint( self, "team_CTF_alphaspawn" );
-
-    return GENERIC_SelectBestRandomSpawnPoint( self, "team_CTF_betaspawn" );
+        return @FB_SelectBestRandomTeamSpawnPoint( self, TEAM_BETA );
 }
 
 String @GT_ScoreboardMessage( uint maxlen )
@@ -215,6 +206,8 @@ void GT_PlayerRespawn( Entity @ent, int old_team, int new_team )
     if ( old_team != new_team )
     {
         // ** MISSING CLEAR SCORES **
+        goals[ent.playerNum] = 0;
+        owngoals[ent.playerNum] = 0;
     }
 
     if ( ent.isGhosting() )
@@ -269,7 +262,8 @@ void GT_PlayerRespawn( Entity @ent, int old_team, int new_team )
     else
         ent.client.selectWeapon( -1 ); // auto-select best weapon in the inventory
 
-    //ent.client.setPMoveMaxSpeed(500);
+    ent.client.pmoveDashSpeed = 1000;
+    ent.client.pmoveFeatures = ent.client.pmoveFeatures | PMFEAT_GHOSTMOVE;
 
     // add a teleportation effect
     ent.respawnEffect();
@@ -286,11 +280,12 @@ void GT_ThinkRules()
             match.launchState( match.getState() + 1 );
     }
 
-    GENERIC_Think();
-    FB_Ball.Update();
-
     if ( match.getState() >= MATCH_STATE_POSTMATCH )
         return;
+
+    GENERIC_Think();
+
+    futsball.think();
 }
 
 // The game has detected the end of the match state, but it
@@ -327,7 +322,7 @@ void GT_MatchStateStarted()
     switch ( match.getState() )
     {
     case MATCH_STATE_WARMUP:
-        GENERIC_SetUpWarmup();
+        futsball.SetUpWarmup();
         SpawnIndicators::Create( "team_CTF_alphaplayer", TEAM_ALPHA );
         SpawnIndicators::Create( "team_CTF_alphaspawn", TEAM_ALPHA );
         SpawnIndicators::Create( "team_CTF_betaplayer", TEAM_BETA );
@@ -335,22 +330,18 @@ void GT_MatchStateStarted()
         break;
 
     case MATCH_STATE_COUNTDOWN:
-        GENERIC_SetUpCountdown();
+        futsball.SetUpCountdown();
 		SpawnIndicators::Delete();	
         break;
 
     case MATCH_STATE_PLAYTIME:
-        GENERIC_SetUpMatch();
-        for ( uint i = 0; i < uint(maxClients); i++ )
-        {
-            goals[i] = 0;
-            owngoals[i] = 0;
-        }
-        FB_Ball.resetPos(0.0);
+        futsball.newGame();
+        //GENERIC_SetUpMatch();
         break;
 
     case MATCH_STATE_POSTMATCH:
-        GENERIC_SetUpEndMatch();
+        futsball.endGame();
+        //GENERIC_SetUpEndMatch();
         break;
 
     default:
@@ -441,7 +432,7 @@ void GT_InitGametype()
 
 	gametype.mmCompatible = true;
 	
-    gametype.spawnpointRadius = 256;
+    gametype.spawnpointRadius = 0;
 
     if ( gametype.isInstagib )
     {
@@ -456,8 +447,8 @@ void GT_InitGametype()
     G_ConfigString( CS_SCB_PLAYERTAB_LAYOUT, "%n 112 %s 52 %i 52 %i 60 %l 48 %r l1" );
     G_ConfigString( CS_SCB_PLAYERTAB_TITLES, "Name Clan Goals OwnGoals Ping R" );
 
-    futsballsound = G_SoundIndex( "sounds/futsball/ball.wav", true );
-    futsballmodel = G_ModelIndex( "models/futsball/ball.md3", true );
+    int bla = G_SoundIndex("sounds/futsball/ball_close_0.ogg", true);
+    int bli = G_SoundIndex( "sounds/futsball/announcer_siren_0", true );
 
     // add commands
     //G_RegisterCommand( "drop" );
@@ -470,6 +461,13 @@ void GT_InitGametype()
 
     goals.resize(maxClients);
     owngoals.resize(maxClients);
+    for ( int i = 0; i < maxClients; i++ )
+    {
+        @jetpacks[i].client = @G_GetClient(i);
+        @jetpacks[i].player = @G_GetClient(i).getEnt();
+        @chaseCams[i].client = @G_GetClient(i);
+        @chaseCams[i].player = @G_GetClient(i).getEnt();
+    }
 
     G_Print( "Gametype '" + gametype.title + "' initialized\n" );
 }

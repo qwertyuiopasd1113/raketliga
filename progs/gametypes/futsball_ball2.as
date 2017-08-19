@@ -3,16 +3,17 @@ Vec3 Ball_Spawn;
 const float pi = 3.141592f;
 
 Cvar fb_knockback("fb_knockback", "0.5", 0);	// knockback multiplier
-Cvar fb_bounce("fb_bounce", "0.8", 0);			// bounce multiplier
-Cvar fb_friction("fb_friction", "0.9", 0);		// "slide" multiplier
-Cvar fb_gravity("fb_gravity", "0.3", 0);		// downward velocity per update
-Cvar fb_stop("fb_stop", "0.1", 0);				// stopping threshold
+Cvar fb_bounce("fb_bounce", "0.7", 0);			// bounce multiplier
+Cvar fb_friction("fb_friction", "0.97", 0);		// "slide" multiplier
+Cvar fb_gravity("fb_gravity", "0.15", 0);		// downward velocity per update
+Cvar fb_stop("fb_stop", "0.0", 0);				// stopping threshold
 Cvar fb_maxspeed("fb_maxspeed", "32.0", 0);		// max speed
 Cvar fb_touch("fb_touch", "0", 0);				// do player touch kick stuff
 Cvar fb_touchkick("fb_touchkick", "50", 0);		// touch kick amount
 Cvar fb_touchminkick("fb_touchminkick", "10", 0); // minimum touch kick amount
 Cvar fb_touchspeed("fb_touchspeed", "750", 0); // touch player velocity kick multiplier bla
 Cvar fb_touchoffset("fb_touchoffset", "8", 0);  // touch collision box offset
+Cvar fb_noclip("fb_noclip", "1", 0);  			// ball vs player noclip
 
 void target_ball( Entity@ ent )
 {
@@ -39,6 +40,7 @@ class Ball
 	float radius;
 	int delay;
 	bool scored = false;
+	bool hover = false;
 
 	Ball(Entity@ ball, float radius)
 	{
@@ -117,11 +119,12 @@ class Ball
 
 		@this.groundEntity = null;
 		this.groundNormal = Vec3();
+		this.UpdateIndicator();
 	}
 
 	void InitCollider(Entity @ent)
 	{
-		ent.solid = SOLID_YES;
+		//ent.solid = SOLID_YES;
 		ent.setSize(
 			Vec3(-radius, -radius, -radius),
 			Vec3( radius,  radius,  radius)
@@ -129,7 +132,7 @@ class Ball
 		ent.clipMask = MASK_ALL;
 		ent.nextThink = levelTime + 1;
 		ent.health = 100000;
-		ent.takeDamage = DAMAGE_AIM;
+		//ent.takeDamage = DAMAGE_AIM;
 		//@ent.touch = FB_Ball_Touch;
 		ent.svflags &= ~SVF_NOCLIENT;
 		ent.svflags |= SVF_BROADCAST;
@@ -144,6 +147,11 @@ class Ball
 
 	void Update()
 	{
+		if ( futsball.state == FB_ROUND_PREROUND )
+		{
+			return;
+		}
+
 		/*if ( this.log )
 		{
 			G_Print("update "+levelTime+"\n");
@@ -151,14 +159,23 @@ class Ball
 		}*/
 
 		//goal delay & reset
-		if ( delay > 0 && scored )
+		if ( match.getState() == MATCH_STATE_WARMUP )
 		{
-			delay -= frameTime;
-		}
-		if ( delay <= 0 && scored )
-		{
-			scored = false;
-			resetPos(0);
+			if ( delay > 0 && scored )
+			{
+				delay -= frameTime;
+			}
+			if ( delay <= 0 && scored )
+			{
+				scored = false;
+				resetPos(0);
+				/*for ( uint i = 0; i < uint(maxClients); i++ )
+				{
+					Client@ client = @G_GetClient(i);
+					if ( @client != null && client.team != TEAM_SPECTATOR )
+						client.respawn(false);
+				}*/
+			}
 		}
 
 		Vec3 vel = main.velocity;
@@ -195,7 +212,7 @@ class Ball
 				offset.normalize();
 
 				tr.doTrace( origin, Vec3(), Vec3(), origin + offset*radius*8.0, collider.entNum, MASK_PLAYERSOLID );
-				if ( origin.distance(tr.endPos) < radius )
+				if ( origin.distance(tr.endPos) < radius && !( fb_noclip.boolean && tr.contents == CONTENTS_BODY ) )
 				{
 					origin += tr.planeNormal*((origin+offset*radius).distance(tr.endPos));
 					planeNormal += tr.planeNormal;
@@ -218,7 +235,7 @@ class Ball
 			}
 
 			if ( abs(vel*planeNormal)  > 2.0 )
-				G_PositionedSound( origin, CHAN_ITEM, futsballsound, 5.0/vel.length() );
+				G_PositionedSound( origin, CHAN_ITEM, G_SoundIndex("sounds/futsball/ball_bounce_" + int( brandom( 0, 12 ) ) ), 5.0/vel.length() );
 		}
 
 		//limit to radius speed
@@ -245,27 +262,45 @@ class Ball
 		this.particles.velocity = vel;
 		this.particles.origin = origin;
 
-		tr.doTrace( origin, Vec3(), Vec3(), origin - Vec3(0,0,1024), this.collider.entNum, MASK_PLAYERSOLID );
+		/*tr.doTrace( origin, Vec3(), Vec3(), origin - Vec3(0,0,2048), this.collider.entNum, MASK_PLAYERSOLID );
 		this.indicator.origin = tr.endPos;
 		Vec3 vel_indicator = Vec3(vel);
 		vel_indicator.z = 0;
-		this.indicator.velocity = vel_indicator;
+		this.indicator.velocity = vel_indicator;*/
+		this.UpdateIndicator();
 
 		//G_CenterPrintMsg(null, "speed: "+vel.length());
 	}
 
+	void UpdateIndicator()
+	{
+		Trace tr;
+		tr.doTrace( collider.origin, Vec3(), Vec3(), collider.origin - Vec3(0,0,2048), this.collider.entNum, MASK_PLAYERSOLID );
+		this.indicator.origin = tr.endPos;
+		Vec3 vel_indicator = Vec3(collider.velocity);
+		vel_indicator.z = 0;
+		this.indicator.velocity = vel_indicator;
+	}
+
 	void Knockback( Vec3 dir, float kick )
 	{
+		Vec3 vel = main.velocity;
 		dir.normalize();
-		Vec3 knockback = dir * kick * fb_knockback.value;
+		Vec3 knockback = dir * (kick * fb_knockback.value);
 
 		if ( @this.groundEntity != null )
 		{
 			knockback += 2.0 * abs(knockback*this.groundNormal) * this.groundNormal;
 		}
 
-		Vec3 vel = main.velocity;
-		vel += knockback;
+		float kb_len = knockback.length();
+		float vel_len = vel.length();
+
+		//vel += knockback;
+		vel = (0.25*vel + 0.75*knockback);
+		vel.normalize();
+
+		vel *= kb_len + vel_len;
 
 		//limit to radius speed
 		if ( vel.length() > fb_maxspeed.value )
@@ -320,10 +355,10 @@ class Ball
 		tr.doTrace(origin, Vec3(), Vec3(), origin + fwd * (distance + radius*2), -1, MASK_SHOT);
 
 		//temp entity for position
-		/*Entity@ temp = @G_SpawnEntity("temp");
+		Entity@ temp = @G_SpawnEntity("temp");
 		temp.origin = tr.endPos;	
-		temp.explosionEffect(32);
-		temp.freeEntity();*/
+		temp.explosionEffect(16);
+		temp.freeEntity();
 
 		Vec3 trdir = collider.origin - tr.endPos;
 		float trdist = trdir.length();
@@ -488,9 +523,14 @@ void FB_Goal(Entity @goal)
 		Entity@ goaltarget = @goaltargets[i];
 		//G_Print("goaltarget.classname = "+goaltarget.classname+"\n");
 		goaltarget.explosionEffect(2048);
-		goaltarget.splashDamage( goaltarget, 4096, 0, 2048, 0, 0 );
+		if ( match.getState() == MATCH_STATE_PLAYTIME )
+			goaltarget.splashDamage( goaltarget, 4096, 0, 2048, 0, 0 );
+		G_PositionedSound( goaltarget.origin, CHAN_AUTO, G_SoundIndex( "sounds/futsball/goal_" + int( brandom( 0, 3 ) ) ), 0 );
 	}
-	FB_Ball.delay = 1000;
+	if ( match.getState() == MATCH_STATE_WARMUP )
+	{
+		FB_Ball.delay = 1000;
+	}
 	FB_Ball.scored = true;
 
 	if ( match.getState() == MATCH_STATE_PLAYTIME )
@@ -505,22 +545,24 @@ void FB_Goal(Entity @goal)
 		} else {
 			G_PrintMsg(null, client.name + " Scored for "+((goal_team==TEAM_ALPHA)?"Alpha":"Beta")+"!\n");
 			goals[client.playerNum]++;
+			client.stats.setScore(goals[client.playerNum]);
 		}
 
 		if ( goal_team == TEAM_BETA )
 		{
 			G_GetTeam(TEAM_BETA).stats.addScore(1);
-			int soundIndex = G_SoundIndex( "sounds/announcer/ctf/score_team0" + int( brandom( 1, 2 ) ) );
+			int soundIndex = G_SoundIndex( "sounds/futsball/announcer_team_scored" );
 			G_AnnouncerSound( null, soundIndex, TEAM_BETA, false, null );
-			soundIndex = G_SoundIndex( "sounds/announcer/ctf/score_enemy0" + int( brandom( 1, 2 ) ) );
+			soundIndex = G_SoundIndex( "sounds/futsball/announcer_enemy_scored" );
 			G_AnnouncerSound( null, soundIndex, TEAM_ALPHA, false, null );
 		} else {
 			G_GetTeam(TEAM_ALPHA).stats.addScore(1);
-			int soundIndex = G_SoundIndex( "sounds/announcer/ctf/score_team0" + int( brandom( 1, 2 ) ) );
+			int soundIndex = G_SoundIndex( "sounds/futsball/announcer_team_scored" );
 			G_AnnouncerSound( null, soundIndex, TEAM_ALPHA, false, null );
-			soundIndex = G_SoundIndex( "sounds/announcer/ctf/score_enemy0" + int( brandom( 1, 2 ) ) );
+			soundIndex = G_SoundIndex( "sounds/futsball/announcer_enemy_scored" );
 			G_AnnouncerSound( null, soundIndex, TEAM_BETA, false, null );
 		}
+		futsball.newRoundState( FB_ROUND_ROUNDFINISHED );
 	}
 
 }
@@ -544,7 +586,7 @@ void FB_Boost_Use(Entity @ent, Entity @other, Entity @activator)
 
 	Vec3 origin = other.origin + (mins + maxs) * 0.5;
 
-	G_PositionedSound( origin, CHAN_AUTO, G_SoundIndex("sounds/world/launchpad.ogg"), 0.25 );
+	G_PositionedSound( origin, CHAN_AUTO, G_SoundIndex("sounds/futsball/boost_0.ogg"), 0.25 );
 
 
 	Vec3 fwd, right, up;
