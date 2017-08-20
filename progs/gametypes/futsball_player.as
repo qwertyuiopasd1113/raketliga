@@ -43,7 +43,7 @@ class PlayerState
 		for ( uint i = 0; i < KEY_TOTAL; i++ )
 		{
 			wasPressed[i] = isPressed[i];
-			isPressed[i] = ( client.pressedKeys & (1<<int(i)) == (1<<int(i)) );
+			isPressed[i] = ( int(client.pressedKeys) & (1<<i) == (1<<i) );
 		}
 		wasOnGround = isOnGround;
 		isOnGround = ( @client.getEnt().groundEntity != null );
