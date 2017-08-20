@@ -9,18 +9,60 @@ const int CHASE_RESET = 4;
 Cvar fb_airdash("fb_airdash", "0", 0);
 Cvar fb_jetpack("fb_jetpack", "1", 0);
 
+const uint KEY_FWD = 		0;
+const uint KEY_BACK = 		1;
+const uint KEY_LEFT = 		2;
+const uint KEY_RIGHT = 		3;
+const uint KEY_ATTACK = 	4;
+const uint KEY_JUMP = 		5;
+const uint KEY_CROUCH = 	6;
+const uint KEY_SPECIAL = 	7;
+const uint KEY_TOTAL = 		8;
+
+class PlayerState
+{
+	bool[] wasPressed(KEY_TOTAL);
+	bool[] isPressed(KEY_TOTAL);
+	bool wasOnGround;
+	bool isOnGround;
+
+	PlayerState()
+	{
+		for ( uint i = 0; i < KEY_TOTAL; i++ )
+		{
+			wasPressed[i] = false;
+			isPressed[i] = false;
+		}
+		wasOnGround = false;
+		isOnGround = false;
+	}
+	~PlayerState(){}
+
+	void Update(Client@ client)
+	{
+		for ( uint i = 0; i < KEY_TOTAL; i++ )
+		{
+			wasPressed[i] = isPressed[i];
+			isPressed[i] = ( client.pressedKeys & (1<<int(i)) == (1<<int(i)) );
+		}
+		wasOnGround = isOnGround;
+		isOnGround = ( @client.getEnt().groundEntity != null );
+	}
+}
+
 class Player
 {
 	Client@ client;
 	Entity@ player;
+
+	PlayerState pstate;
+
 	Entity@ jetpack;
 	bool jetpackActive = false;
 
 	uint dashTimestamp;
 	bool canDash = false;
 	bool hasDashed = false;
-	bool dashPressed = false;
-	bool isOnGround = true;
 
 	uint kickTimestamp;
 	float kickCharge;
@@ -37,6 +79,7 @@ class Player
 
 	void Update()
 	{
+		this.pstate.Update(client);
         if ( player.isGhosting() )
         {
         	this.Ghosting();
@@ -74,16 +117,7 @@ class Player
 		this.jetpack.team = player.team;
 
 
-		bool new_dashPressed = false;
-		if ( client.pressedKeys & 128 == 128 )
-			new_dashPressed = true;
-
-		bool new_isOnGround = true;
-		if ( @player.groundEntity == null )
-			new_isOnGround = false;
-
-
-		if ( @player.groundEntity == null )
+		if ( !pstate.isOnGround )
 		{
 			client.pmoveFeatures = client.pmoveFeatures & ~PMFEAT_CROUCH;
 		} else {
@@ -97,7 +131,7 @@ class Player
 
 
 
-		if ( client.pressedKeys & 16 == 16 && kickTimestamp <= levelTime && futsball.state != FB_ROUND_PREROUND )
+		if ( pstate.isPressed[KEY_ATTACK] && kickTimestamp <= levelTime && futsball.state != FB_ROUND_PREROUND )
 		{
 			Vec3 origin = player.origin;
 			origin.z += player.viewHeight;
@@ -146,17 +180,17 @@ class Player
 			this.jetpack.origin = origin;
 			this.jetpack.velocity = player.velocity;
 
-			if ( !(@player.groundEntity != null && client.pressedKeys & 64 == 64) && futsball.state != FB_ROUND_PREROUND )
+			if ( !(pstate.isOnGround && pstate.isPressed[KEY_CROUCH]) && futsball.state != FB_ROUND_PREROUND )
 			{
 				Vec3 vel = player.velocity;
 				bool active = false;
-				if ( client.pressedKeys & 32 == 32 )
+				if ( pstate.isPressed[KEY_JUMP] )
 				{
 					vel.z += 20;
 					active = true;
 				}
 
-				if ( client.pressedKeys & 64 == 64 )
+				if ( pstate.isPressed[KEY_CROUCH] )
 				{
 					vel.z -= 20;
 					active = true;
@@ -191,7 +225,7 @@ class Player
 
 		if ( fb_airdash.boolean )
 		{
-			if ( new_isOnGround )
+			if ( pstate.isOnGround )
 			{
 				canDash = false;
 				hasDashed = false;
@@ -200,13 +234,13 @@ class Player
 
 			if ( dashTimestamp <= levelTime )
 			{
-				if ( !new_dashPressed )
+				if ( !pstate.isPressed[KEY_SPECIAL] )
 				{
 					canDash = true;
 				}
 			}
 
-			if ( !hasDashed && canDash && !dashPressed && new_dashPressed )
+			if ( !hasDashed && canDash && !pstate.wasPressed[KEY_SPECIAL] && pstate.isPressed[KEY_SPECIAL] )
 			{
 				Vec3 fwd, right, up;
 				player.angles.angleVectors(fwd, right, up);
@@ -245,8 +279,6 @@ class Player
 
 
 		}
-		dashPressed = new_dashPressed;
-		isOnGround = new_isOnGround;
 	}
 
 	bool InRange()
@@ -280,12 +312,10 @@ class Player
 			}
 			if ( !client.chaseActive )
 			{
-				bool new_chase_pressed = ( client.pressedKeys & 16 == 16 );
-				if ( new_chase_pressed && !chase_pressed )
+				if ( pstate.isPressed[KEY_ATTACK] && !pstate.wasPressed[KEY_ATTACK] )
 				{
 					chase_state++;
 				}
-				chase_pressed = new_chase_pressed;
 
 				switch (chase_state)
 				{
