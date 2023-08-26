@@ -1,6 +1,12 @@
 Ball FB_Ball;
 Vec3 Ball_Spawn;
-const float pi = 3.141592f;
+// http://dmccooey.com/polyhedra/GeodesicIcosahedron2.html
+const float C0 = sqrt(5 * (5 - 2 * sqrt(5))) / 5;
+const float C1 = sqrt(10 * (5 - sqrt(5))) / 10;
+const float C2 = (6 * sqrt(5) + sqrt(2 * (85 - sqrt(5))) - 16) / 19;
+const float C3 = sqrt(10 * (5 + sqrt(5))) / 10;
+const float C4 = (7 - 5 * sqrt(5) + sqrt(2 * (125 + 41 * sqrt(5)))) / 19;
+const float C5 = sqrt(10 * (5 - sqrt(5))) / 5;
 
 Cvar fb_knockback("fb_knockback", "0.5", 0);	// knockback multiplier
 Cvar fb_bounce("fb_bounce", "0.7", 0);			// bounce multiplier
@@ -193,32 +199,38 @@ class Ball
 		else
 			return;
 
+		Vec3[] predefinedOffsets = {
+			Vec3(0.0, 0.0, C5), Vec3(0.0, 0.0, -C5), Vec3( C5, 0.0, 0.0), Vec3(-C5, 0.0, 0.0),
+			Vec3(0.0, C5, 0.0), Vec3(0.0, -C5, 0.0), Vec3( C2, 0.0, C4), Vec3( C2, 0.0, -C4),
+			Vec3(-C2, 0.0, C4), Vec3(-C2, 0.0, -C4), Vec3( C4, C2, 0.0), Vec3( C4, -C2, 0.0),
+			Vec3(-C4, C2, 0.0), Vec3(-C4, -C2, 0.0), Vec3(0.0, C4, C2), Vec3(0.0, C4, -C2),
+			Vec3(0.0, -C4, C2), Vec3(0.0, -C4, -C2), Vec3( C0, C1, C3), Vec3( C0, C1, -C3),
+			Vec3( C0, -C1, C3), Vec3( C0, -C1, -C3), Vec3(-C0, C1, C3), Vec3(-C0, C1, -C3),
+			Vec3(-C0, -C1, C3), Vec3(-C0, -C1, -C3), Vec3( C3, C0, C1), Vec3( C3, C0, -C1),
+			Vec3( C3, -C0, C1), Vec3( C3, -C0, -C1), Vec3(-C3, C0, C1), Vec3(-C3, C0, -C1),
+			Vec3(-C3, -C0, C1), Vec3(-C3, -C0, -C1), Vec3( C1, C3, C0), Vec3( C1, C3, -C0),
+			Vec3( C1, -C3, C0), Vec3( C1, -C3, -C0), Vec3(-C1, C3, C0), Vec3(-C1, C3, -C0),
+			Vec3(-C1, -C3, C0), Vec3(-C1, -C3, -C0)
+		};
+
 		Vec3 planeNormal;
 		Vec3 offset;
 		int entNum = 0;
 		int count = 0;
 
-		float step = pi / 8;
 		Trace tr;
-		for ( float theta = 0; theta <= pi; theta += step )
+		for (uint i = 0; i < predefinedOffsets.length(); ++i)
 		{
-			for ( float phi = -pi; phi < pi; phi += step )
-			{
-				offset = Vec3(
-					sin(theta) * cos(phi),
-					sin(theta) * sin(phi),
-					cos(theta)
-				);
-				offset.normalize();
+			offset = predefinedOffsets[i];
+			offset.normalize();
 
-				tr.doTrace( origin, Vec3(), Vec3(), origin + offset*radius*8.0, collider.entNum, MASK_PLAYERSOLID );
-				if ( origin.distance(tr.endPos) < radius && !( fb_noclip.boolean && tr.contents == CONTENTS_BODY ) )
-				{
-					origin += tr.planeNormal*((origin+offset*radius).distance(tr.endPos));
-					planeNormal += tr.planeNormal;
-					entNum = tr.entNum;
-					count++;
-				}
+			tr.doTrace( origin, Vec3(), Vec3(), origin + offset*radius*8.0, collider.entNum, MASK_PLAYERSOLID );
+			if ( origin.distance(tr.endPos) < radius && !( fb_noclip.boolean && tr.contents == CONTENTS_BODY ) )
+			{
+				origin += tr.planeNormal*((origin+offset*radius).distance(tr.endPos));
+				planeNormal += tr.planeNormal;
+				entNum = tr.entNum;
+				count++;
 			}
 		}
 		if ( count != 0 )
