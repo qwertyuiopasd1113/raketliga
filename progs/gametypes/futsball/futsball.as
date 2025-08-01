@@ -32,6 +32,10 @@ Entity@ ball_spawn;
 int[] goals;
 int[] owngoals;
 
+bool mapWorks = false;
+
+Cvar fs_game( "fs_game", "", 0 );
+const bool isWarfork = ( fs_game.string == "basewf" );
 // The map entities have just been spawned. The level is initialized for
 // playing, but nothing has yet started.
 void GT_SpawnGametype()
@@ -62,9 +66,15 @@ void GT_SpawnGametype()
         if ( ent.classname == "func_object" && ent.targetname == "ball" )
         {
             G_Print("found ball\n");
+            mapWorks = true;
 
             FB_SpawnBall(@ent);
         }
+    }
+
+    if (!mapWorks)
+    {
+        G_Print("map doesnt work with futsball\n");
     }
 }
 
@@ -116,6 +126,98 @@ bool GT_Command( Client @client, const String &cmdString, const String &argsStri
         ent.linkEntity();
         return true;
     }
+    else if ( cmdString == "callvotevalidate" )
+    {
+        String votename = argsString.getToken( 0 );
+
+        if ( votename == "airdash" )
+        {
+            String voteArg = argsString.getToken( 1 );
+            if ( voteArg.len() < 1 )
+            {
+                client.printMessage( "Callvote " + votename + " requires at least one argument\n" );
+                return false;
+            }
+
+            int value = voteArg.toInt();
+            if ( voteArg != "0" && voteArg != "1" )
+            {
+                client.printMessage( "Callvote " + votename + " expects a 1 or a 0 as argument\n" );
+                return false;
+            }
+
+            if ( voteArg == "0" && !fb_airdash.boolean )
+            {
+                client.printMessage( "Airdash is already disabled\n" );
+                return false;
+            }
+
+            if ( voteArg == "1" && fb_airdash.boolean )
+            {
+                client.printMessage( "Airdash is already enabled\n" );
+                return false;
+            }
+
+            return true;
+        }
+
+        if ( votename == "jetpack" )
+        {
+            String voteArg = argsString.getToken( 1 );
+            if ( voteArg.len() < 1 )
+            {
+                client.printMessage( "Callvote " + votename + " requires at least one argument\n" );
+                return false;
+            }
+
+            int value = voteArg.toInt();
+            if ( voteArg != "0" && voteArg != "1" )
+            {
+                client.printMessage( "Callvote " + votename + " expects a 1 or a 0 as argument\n" );
+                return false;
+            }
+
+            if ( voteArg == "0" && !fb_jetpack.boolean )
+            {
+                client.printMessage( "Jetpack is already disabled\n" );
+                return false;
+            }
+
+            if ( voteArg == "1" && fb_jetpack.boolean )
+            {
+                client.printMessage( "Jetpack is already enabled\n" );
+                return false;
+            }
+
+            return true;
+        }
+
+
+        client.printMessage( "Unknown callvote " + votename + "\n" );
+        return false;
+    }
+    else if ( cmdString == "callvotepassed" )
+    {
+        String votename = argsString.getToken( 0 );
+
+        if ( votename == "airdash" )
+        {
+            if ( argsString.getToken( 1 ).toInt() > 0 )
+                fb_airdash.set( 1 );
+            else
+                fb_airdash.set( 0 );
+        }
+
+        if ( votename == "jetpack" )
+        {
+            if ( argsString.getToken( 1 ).toInt() > 0 )
+                fb_jetpack.set( 1 );
+            else
+                fb_jetpack.set( 0 );
+        }
+
+        return true;
+    }
 
     return false;
 }
@@ -157,7 +259,7 @@ String @GT_ScoreboardMessage( uint maxlen )
             int playerID = ( ent.isGhosting() && ( match.getState() == MATCH_STATE_PLAYTIME ) ) ? -( ent.playerNum + 1 ) : ent.playerNum;
 
             // "Name Score Ping C R"
-            entry = "&p " + playerID + " " + ent.client.clanName + " "
+            entry = "&p " + playerID + " " + ( isWarfork ? playerID + " " : "" ) + ent.client.clanName + " "
                     + goals[ent.playerNum] + " " + owngoals[ent.playerNum] + " "
                     + ent.client.ping + " " + ( ent.client.isReady() ? "1" : "0" ) + " ";
 
@@ -213,6 +315,7 @@ void GT_PlayerRespawn( Entity @ent, int old_team, int new_team )
     if ( ent.isGhosting() )
         return;
 
+    /*
     if ( gametype.isInstagib )
     {
         ent.client.inventoryGiveItem( WEAP_INSTAGUN );
@@ -262,6 +365,8 @@ void GT_PlayerRespawn( Entity @ent, int old_team, int new_team )
     else
         ent.client.selectWeapon( -1 ); // auto-select best weapon in the inventory
 
+    */
+
     ent.client.pmoveDashSpeed = 1000;
     ent.client.pmoveFeatures = ent.client.pmoveFeatures | PMFEAT_GHOSTMOVE;
 
@@ -294,6 +399,14 @@ void GT_ThinkRules()
 // state by returning true.
 bool GT_MatchStateFinished( int incomingMatchState )
 {
+    if ( match.getState() <= MATCH_STATE_WARMUP && incomingMatchState > MATCH_STATE_WARMUP
+        && incomingMatchState < MATCH_STATE_POSTMATCH && !mapWorks)
+    {
+        G_PrintMsg(null, "Futsball does not work with this map, please switch to a map that does.\n");
+        G_CenterPrintMsg(null, "Futsball does not work with this map, please switch to a map that does.");
+        return false;
+    }
+
     if ( match.getState() <= MATCH_STATE_WARMUP && incomingMatchState > MATCH_STATE_WARMUP
             && incomingMatchState < MATCH_STATE_POSTMATCH )
         match.startAutorecord();
@@ -363,7 +476,7 @@ void GT_InitGametype()
 {
     gametype.title = "FutsBall";
     gametype.version = "0.1";
-    gametype.author = "Warsow Development Team";
+    gametype.author = "Warsow Development Team, MSC, Gelmo, algolineu";
 
     // if the gametype doesn't have a config file, create it
     if ( !G_FileExists( "configs/server/gametypes/" + gametype.name + ".cfg" ) )
@@ -374,23 +487,22 @@ void GT_InitGametype()
         config = "// '" + gametype.title + "' gametype configuration file\n"
                  + "// This config will be executed each time the gametype is started\n"
                  + "\n\n// map rotation\n"
-                 + "set g_maplist \"wctf1 wctf3 wctf4 wctf5 wctf6\" // list of maps in automatic rotation\n"
+                 + "set g_maplist \"raketliga_slide grid_slide\" // list of maps in automatic rotation\n"
                  + "set g_maprotation \"1\"   // 0 = same map, 1 = in order, 2 = random\n"
                  + "\n// game settings\n"
                  + "set g_scorelimit \"0\"\n"
-                 + "set g_timelimit \"20\"\n"
+                 + "set g_timelimit \"10\"\n"
                  + "set g_warmup_timelimit \"1\"\n"
                  + "set g_match_extendedtime \"5\"\n"
-                 + "set g_allow_falldamage \"1\"\n"
-                 + "set g_allow_selfdamage \"1\"\n"
+                 + "set g_allow_falldamage \"0\"\n"
+                 + "set g_allow_selfdamage \"0\"\n"
                  + "set g_allow_teamdamage \"0\"\n"
-                 + "set g_allow_stun \"1\"\n"
-                 + "set g_teams_maxplayers \"5\"\n"
+                 + "set g_allow_stun \"0\"\n"
+                 + "set g_teams_maxplayers \"0\"\n"
                  + "set g_teams_allow_uneven \"0\"\n"
-                 + "set g_countdown_time \"5\"\n"
+                 + "set g_countdown_time \"3\"\n"
                  + "set g_maxtimeouts \"3\" // -1 = unlimited\n"
                  + "set g_challengers_queue \"0\"\n"
-                 + "set ctf_powerupDrop \"0\"\n"
                  + "\necho \"" + gametype.name + ".cfg executed\"\n";
 
         G_WriteFile( "configs/server/gametypes/" + gametype.name + ".cfg", config );
@@ -444,8 +556,15 @@ void GT_InitGametype()
         gametype.setTeamSpawnsystem( team, SPAWNSYSTEM_INSTANT, 0, 0, false );
 
     // define the scoreboard layout
-    G_ConfigString( CS_SCB_PLAYERTAB_LAYOUT, "%n 112 %s 52 %i 52 %i 60 %l 48 %r l1" );
-    G_ConfigString( CS_SCB_PLAYERTAB_TITLES, "Name Clan Goals OwnGoals Ping R" );
+    if (isWarfork) {
+        G_ConfigString( CS_SCB_PLAYERTAB_LAYOUT, "%a l1 %n 112 %s 52 %i 52 %i 60 %l 48 %r l1" );
+        G_ConfigString( CS_SCB_PLAYERTAB_TITLES, "AVATAR Name Clan Goals OwnGoals Ping R" );
+    }
+    else
+    {
+        G_ConfigString( CS_SCB_PLAYERTAB_LAYOUT, "%n 112 %s 52 %i 52 %i 60 %l 48 %r l1" );
+        G_ConfigString( CS_SCB_PLAYERTAB_TITLES, "Name Clan Goals OwnGoals Ping R" );
+    }
 
     int bla = G_SoundIndex("sounds/futsball/ball_close_0.ogg", true);
     int bli = G_SoundIndex( "sounds/futsball/announcer_siren_0", true );
@@ -456,8 +575,8 @@ void GT_InitGametype()
     //G_RegisterCommand( "resetball" );
     //G_RegisterCommand( "spawntest" );
 
-    /*G_RegisterCallvote( "ctf_powerup_drop", "1 or 0", "Anables or disables the dropping of powerups at dying in ctf." );
-    G_RegisterCallvote( "ctf_flag_instant", "1 or 0", "Anables or disables instant flag captures and unlocks in ctf." );*/
+    G_RegisterCallvote( "airdash", "<1 or 0>", "bool", "Enable or disable airdash" );
+    G_RegisterCallvote( "jetpack", "<1 or 0>", "bool", "Enable or disable jetpack" );
 
     goals.resize(maxClients);
     owngoals.resize(maxClients);

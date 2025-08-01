@@ -550,13 +550,13 @@ void FB_Goal(Entity @goal)
 	{
 		if ( ball_team == TEAM_PLAYERS )
 		{
-			G_PrintMsg(null, "Something scored for "+((goal_team==TEAM_ALPHA)?"Alpha":"Beta")+"!\n");
+			G_PrintMsg(null, "Something scored for " + G_GetTeam(goal_team).name + "!\n");
 		} else if ( goal_team != ball_team )
 		{
-			G_PrintMsg(null, client.name + " made an Own Goal!\n");
+			G_PrintMsg(null, client.name + S_COLOR_RED + " scored in their own goal!\n");
 			owngoals[client.playerNum]++;
 		} else {
-			G_PrintMsg(null, client.name + " Scored for "+((goal_team==TEAM_ALPHA)?"Alpha":"Beta")+"!\n");
+			G_PrintMsg(null, client.name + S_COLOR_WHITE + " scored for " + G_GetTeam(goal_team).name + "!\n");
 			goals[client.playerNum]++;
 			client.stats.setScore(goals[client.playerNum]);
 		}

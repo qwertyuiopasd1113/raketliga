@@ -117,7 +117,14 @@ class Player
 		this.jetpack.team = player.team;
 
 
-		if ( !pstate.isOnGround )
+		if (futsball.state == FB_ROUND_PREROUND)
+		{
+			client.pmoveMaxSpeed = 0;
+			client.pmoveDashSpeed = 0;
+			client.pmoveFeatures = client.pmoveFeatures
+			& ~( PMFEAT_WALK | PMFEAT_JUMP | PMFEAT_DASH | PMFEAT_WALLJUMP );
+		}
+		else if ( !pstate.isOnGround )
 		{
 			client.pmoveFeatures = client.pmoveFeatures & ~PMFEAT_CROUCH;
 		} else {

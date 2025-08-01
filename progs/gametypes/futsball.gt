@@ -9,11 +9,11 @@ generic/items.as;
 generic/spawnpoints.as;
 generic/awards.as;
 
-futsball.as;
-futsball_round.as;
-futsball_entities.as;
-futsball_ball.as;
-futsball_player.as;
+futsball/futsball.as;
+futsball/futsball_round.as;
+futsball/futsball_entities.as;
+futsball/futsball_ball.as;
+futsball/futsball_player.as;
 
 legacy/quake1.as;
 
