@@ -390,7 +390,8 @@ void GT_ThinkRules()
 
     GENERIC_Think();
 
-    futsball.think();
+    if (mapWorks)
+        futsball.think();
 }
 
 // The game has detected the end of the match state, but it
