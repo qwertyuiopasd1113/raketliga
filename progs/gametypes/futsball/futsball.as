@@ -366,6 +366,11 @@ void GT_PlayerRespawn( Entity @ent, int old_team, int new_team )
         ent.client.selectWeapon( -1 ); // auto-select best weapon in the inventory
 
     */
+    futsball_SetVoicecommQuickMenu(ent.client);
+
+    if (new_team == TEAM_SPECTATOR)
+        GENERIC_ClearQuickMenu(ent.client);
+
 
     ent.client.pmoveDashSpeed = 1000;
     ent.client.pmoveFeatures = ent.client.pmoveFeatures | PMFEAT_GHOSTMOVE;

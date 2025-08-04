@@ -395,3 +395,21 @@ class Player
 		}
 	}
 }
+
+void futsball_SetVoicecommQuickMenu( Client @client )
+{
+	String menuStr = '';
+	menuStr =
+	'"What a save!" "say What a save!" ' +
+	'"Close one!" "say Close one!" ' +
+	'"Pass to me!" "say_team Pass to me!" ' +
+	'"Oops!" "vsay oops" ' +
+	'"Wow!" "say Wow!" ' +
+	'"Ok!" "vsay ok" ' +
+	'"On offense" "vsay_team onoffense" ' +
+	'"On defense" "vsay_team ondefense" ' +
+	'"Affirmative" "vsay_team affirmative" ' +
+	'"Negative" "vsay_team negative" ';
+
+	GENERIC_SetQuickMenu( @client, menuStr );
+}

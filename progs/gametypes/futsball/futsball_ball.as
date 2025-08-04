@@ -153,7 +153,7 @@ class Ball
 
 	void Update()
 	{
-		if ( futsball.state == FB_ROUND_PREROUND )
+		if ( futsball.state == FB_ROUND_PREROUND || match.isPaused() )
 		{
 			return;
 		}
